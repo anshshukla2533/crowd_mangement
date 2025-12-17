@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crowd Density Monitor</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #3b82f6;
+            --primary-dark: #1e40af;
+            --primary-light: #60a5fa;
+            --danger: #ef4444;
+            --dark-bg: #0a0e27;
+            --card-bg: #151b3d;
+            --border-color: #2d3a66;
+            --text-primary: #f8fafc;
+            --text-secondary: #cbd5e1;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #0a0e27 0%, #1a1f3a 100%);
+            color: var(--text-primary);
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .header {
+            position: fixed;
+            top: 0;
+            width: 100%;
+            background: rgba(21, 27, 61, 0.95);
+            padding: 12px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 1000;
+            border-bottom: 1px solid var(--border-color);
+            backdrop-filter: blur(10px);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .live-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 700;
+            font-size: 14px;
+        }
+
+        .live-dot {
+            width: 10px;
+            height: 10px;
+            background: #ef4444;
+            border-radius: 50%;
+            animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+            box-shadow: 0 0 8px rgba(239, 68, 68, 0.8);
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(1.2); }
+        }
+
+        .button-group {
+            display: flex;
+            gap: 8px;
+        }
+
+        button {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            color: white;
+            border: none;
+            padding: 8px 14px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 700;
+            font-size: 12px;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(59, 130, 246, 0.4);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        .danger-btn {
+            background: linear-gradient(135deg, var(--danger) 0%, #b91c1c 100%);
+            box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+        }
+
+        .danger-btn:hover {
+            box-shadow: 0 6px 16px rgba(239, 68, 68, 0.4);
+        }
+
+        .main-container {
+            display: flex;
+            height: calc(100vh - 54px);
+            padding-top: 54px;
+            gap: 14px;
+            padding: 14px;
+            overflow: hidden;
+        }
+
+        .video-section {
+            flex: 0 0 28%;
+            background: var(--card-bg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            border-radius: 10px;
+            border: 1px solid var(--border-color);
+            overflow: hidden;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+        }
+
+        #live-video {
+            max-width: 94%;
+            max-height: 94%;
+            border-radius: 8px;
+        }
+
+        .heatmap-section {
+            flex: 1;
+            background: var(--card-bg);
+            display: flex;
+            flex-direction: column;
+            border-radius: 10px;
+            border: 1px solid var(--border-color);
+            overflow: hidden;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+        }
+
+        .stats-overlay {
+            background: rgba(10, 14, 39, 0.5);
+            padding: 12px 14px;
+            border-bottom: 1px solid var(--border-color);
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .stats-header {
+            font-weight: 700;
+            font-size: 11px;
+            color: var(--primary-light);
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+
+        .stat-card {
+            background: rgba(59, 130, 246, 0.1);
+            padding: 8px;
+            border-radius: 6px;
+            border: 1px solid rgba(59, 130, 246, 0.25);
+            transition: all 0.2s ease;
+        }
+
+        .stat-card:hover {
+            background: rgba(59, 130, 246, 0.15);
+            border-color: rgba(59, 130, 246, 0.5);
+        }
+
+        .stat-label {
+            font-size: 9px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            margin-bottom: 3px;
+            font-weight: 600;
+        }
+
+        .stat-value {
+            font-size: 18px;
+            font-weight: 800;
+            color: var(--primary-light);
+        }
+
+        .auto-update-status {
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            padding: 6px 8px;
+            border-radius: 5px;
+            margin-bottom: 8px;
+            text-align: center;
+            font-size: 9px;
+            color: #6ee7b7;
+            font-weight: 600;
+        }
+
+        .error-status {
+            background: rgba(239, 68, 68, 0.1);
+            border-color: rgba(239, 68, 68, 0.3);
+            color: #fca5a5;
+        }
+
+        .area-counts {
+            margin-top: 6px;
+            padding-top: 6px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .area-header {
+            font-size: 9px;
+            font-weight: 700;
+            color: var(--primary-light);
+            margin-bottom: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+
+        .area-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 3px 5px;
+            margin: 2px 0;
+            background: rgba(245, 158, 11, 0.08);
+            border-radius: 4px;
+            font-size: 10px;
+            transition: background 0.2s ease;
+        }
+
+        .area-item:hover {
+            background: rgba(245, 158, 11, 0.12);
+        }
+
+        .area-count {
+            color: #fcd34d;
+            font-weight: 700;
+        }
+
+        .heatmap-container {
+            position: relative;
+            flex: 1;
+            padding: 12px;
+        }
+
+        #facility-image {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            border-radius: 8px;
+        }
+
+        #heatmap-canvas {
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            right: 12px;
+            bottom: 12px;
+            pointer-events: none;
+            opacity: 0.85;
+            border-radius: 8px;
+        }
+
+        #detection-canvas {
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            right: 12px;
+            bottom: 12px;
+            pointer-events: none;
+            border-radius: 8px;
+        }
+
+        .legend {
+            position: absolute;
+            bottom: 16px;
+            left: 16px;
+            background: rgba(10, 14, 39, 0.9);
+            backdrop-filter: blur(10px);
+            padding: 10px;
+            border-radius: 6px;
+            font-size: 9px;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+        }
+
+        .legend h4 {
+            font-size: 10px;
+            margin-bottom: 6px;
+            color: var(--primary-light);
+            font-weight: 700;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin: 3px 0;
+        }
+
+        .legend-color {
+            width: 10px;
+            height: 10px;
+            border-radius: 2px;
+        }
+
+        ::-webkit-scrollbar {
+            width: 5px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(59, 130, 246, 0.3);
+            border-radius: 3px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(59, 130, 246, 0.5);
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-left">
+            <div class="live-indicator">
+                <div class="live-dot"></div>
+                <span>LIVE MONITORING</span>
+            </div>
+        </div>
+        <div class="button-group">
+            <button onclick="toggleDetection()" id="toggle-btn">
+                <span id="toggle-icon">⏸️</span>
+                <span id="toggle-text">Pause</span>
+            </button>
+            <button class="danger-btn" onclick="clearHeatmap()">
+                <span>🗑️</span>
+                <span>Clear</span>
+            </button>
+        </div>
+    </div>
+
+    <div class="main-container">
+        <div class="video-section">
+            <img id="live-video" src="/live_feed" alt="Live YOLO Detection Feed">
+        </div>
+
+        <div class="heatmap-section">
+            <div class="stats-overlay">
+                <div class="stats-header">📊 Detection Analytics</div>
+                
+                <div class="auto-update-status" id="update-status">
+                    ✅ Auto-updating from YOLO detections
+                </div>
+                
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-label">People</div>
+                        <div class="stat-value" id="people-count">0</div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-label">Coords</div>
+                        <div class="stat-value" id="coordinates-count">0</div>
+                    </div>
+                </div>
+
+                <div class="area-counts">
+                    <div class="area-header">🏟️ Area Distribution</div>
+                    <div id="area-list"></div>
+                </div>
+            </div>
+
+            <div class="heatmap-container">
+                <img id="facility-image" src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTIwMCIgaGVpZ2h0PSI4MDAiIHZpZXdCb3g9IjAgMCAxMjAwIDgwMCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPCEtLSBNYWluIGZhY2lsaXR5IGJhY2tncm91bmQgLS0+CjxyZWN0IHdpZHRoPSIxMjAwIiBoZWlnaHQ9IjgwMCIgZmlsbD0iIzJhMzY2NiIvPgoKPCEtLSBVcHBlciBsZXZlbCBjb3JyaWRvcnMgLS0+CjxyZWN0IHg9IjUwIiB5PSI1MCIgd2lkdGg9IjExMDAiIGhlaWdodD0iMTIwIiBmaWxsPSIjNGE1NTY4IiBzdHJva2U9IiNmZmYiIHN0cm9rZS13aWR0aD0iMiIvPgo8cmVjdCB4PSI1MCIgeT0iNjMwIiB3aWR0aD0iMTEwMCIgaGVpZ2h0PSIxMjAiIGZpbGw9IiM0YTU1NjgiIHN0cm9rZT0iI2ZmZiIgc3Ryb2tlLXdpZHRoPSIyIi8+CjxyZWN0IHg9IjUwIiB5PSI1MCIgd2lkdGg9IjEyMCIgaGVpZ2h0PSI3MDAiIGZpbGw9IiM0YTU1NjgiIHN0cm9rZT0iI2ZmZiIgc3Ryb2tlLXdpZHRoPSIyIi8+CjxyZWN0IHg9IjEwMzAiIHk9IjUwIiB3aWR0aD0iMTIwIiBoZWlnaHQ9IjcwMCIgZmlsbD0iIzRhNTU2OCIgc3Ryb2tlPSIjZmZmIiBzdHJva2Utd2lkdGg9IjIiLz4KCjwhLS0gTWFpbiBjb3VydCBhcmVhIC0tPgo8cmVjdCB4PSIyMDAiIHk9IjIwMCIgd2lkdGg9IjgwMCIgaGVpZ2h0PSI0MDAiIGZpbGw9IiM5OTczNTQiIHN0cm9rZT0iI2ZmZiIgc3Ryb2tlLXdpZHRoPSIzIi8+Cgo8IS0tIEJhZG1pbnRvbiBjb3VydCBtYXJraW5ncyAtLT4KPHJlY3QgeD0iNDUwIiB5PSIyMDAiIHdpZHRoPSIzMDAiIGhlaWdodD0iNDAwIiBmaWxsPSJub25lIiBzdHJva2U9IiNmZmYiIHN0cm9rZS13aWR0aD0iMyIvPgo8bGluZSB4MT0iNjAwIiB5MT0iMjAwIiB4Mj0iNjAwIiB5Mj0iNjAwIiBzdHJva2U9IiNmZmYiIHN0cm9rZS13aWR0aD0iMiIvPgoKPCEtLSBTZWF0aW5nIGFyZWFzIC0tPgo8cmVjdCB4PSIyMDAiIHk9IjE3MCIgd2lkdGg9IjgwMCIgaGVpZ2h0PSIzMCIgZmlsbD0iIzAwNjZmZiIvPgo8cmVjdCB4PSIyMDAiIHk9IjYwMCIgd2lkdGg9IjgwMCIgaGVpZ2h0PSIzMCIgZmlsbD0iIzAwNjZmZiIvPgoKPCEtLSBUYWJsZSB0ZW5uaXMgYXJlYXMgLS0+CjxyZWN0IHg9IjIyMCIgeT0iNjUwIiB3aWR0aD0iMTAwIiBoZWlnaHQ9IjYwIiBmaWxsPSIjMDA5OWNjIiBzdHJva2U9IiNmZmYiIHN0cm9rZS13aWR0aD0iMSIvPgo8cmVjdCB4PSIzNDAiIHk9IjY1MCIgd2lkdGg9IjEwMCIgaGVpZ2h0PSI2MCIgZmlsbD0iIzAwOTljYyIgc3Ryb2tlPSIjZmZmIiBzdHJva2Utd2lkdGg9IjEiLz4KPHJLY3QgeD0iNzYwIiB5PSI2NTAiIHdpZHRoPSIxMDAiIGhlaWdodD0iNjAiIGZpbGw9IiMwMDk5Y2MiIHN0cm9rZT0iI2ZmZiIgc3Ryb2tlLXdpZHRoPSIxIi8+Cjx0ZXh0IHg9IjYwMCIgeT0iNzUwIiBmaWxsPSIjZmZmIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMjBweCIgZm9udC13ZWlnaHQ9ImJvbGQiPlNQT1JUUyBGQUNJTElUWTwvdGV4dD4KPC9zdmc+" alt="Sports Facility Layout">
+                
+                <canvas id="heatmap-canvas"></canvas>
+                <canvas id="detection-canvas"></canvas>
+                
+                <div class="legend">
+                    <h4>🔥 Crowd Density</h4>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #0066ff;"></div>
+                        <span>Low</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #00ff00;"></div>
+                        <span>Medium</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #ffff00;"></div>
+                        <span>High</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #ff0000;"></div>
+                        <span>Critical</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let heatmapCanvas, heatmapCtx, detectionCanvas, detectionCtx;
+        let facilityImage;
+        let currentDetections = [];
+        let animationFrame;
+        let updateInterval;
+        let detectionActive = true;
+
+        const COURT_BOUNDARIES = {
+            minX: 200 / 1200,
+            maxX: 1000 / 1200,
+            minY: 200 / 800,
+            maxY: 600 / 800
+        };
+
+        function init() {
+            console.log('🚀 Initializing heatmap system...');
+            
+            facilityImage = document.getElementById('facility-image');
+            heatmapCanvas = document.getElementById('heatmap-canvas');
+            heatmapCtx = heatmapCanvas.getContext('2d');
+            detectionCanvas = document.getElementById('detection-canvas');
+            detectionCtx = detectionCanvas.getContext('2d');
+
+            facilityImage.onload = setupCanvas;
+            setupCanvas();
+
+            window.addEventListener('resize', setupCanvas);
+            startAutoUpdate();
+            animate();
+        }
+
+        function setupCanvas() {
+            const container = heatmapCanvas.parentElement;
+            const width = container.clientWidth - 24;
+            const height = container.clientHeight - 24;
+            
+            heatmapCanvas.width = width;
+            heatmapCanvas.height = height;
+            detectionCanvas.width = width;
+            detectionCanvas.height = height;
+            
+            redrawVisualization();
+        }
+
+        function constrainToCourtBoundaries(detection) {
+            const constrainedDetection = { ...detection };
+            constrainedDetection.x = Math.max(COURT_BOUNDARIES.minX, 
+                                    Math.min(COURT_BOUNDARIES.maxX, detection.x));
+            constrainedDetection.y = Math.max(COURT_BOUNDARIES.minY,
+                                    Math.min(COURT_BOUNDARIES.maxY, detection.y));
+            return constrainedDetection;
+        }
+
+        function startAutoUpdate() {
+            console.log('🔄 Starting auto-update...');
+            
+            updateInterval = setInterval(() => {
+                if (!detectionActive) return;
+                
+                fetch('/api/crowd_coordinates')
+                    .then(response => response.json())
+                    .then(data => {
+                        const rawDetections = data.detections || [];
+                        currentDetections = rawDetections.map(constrainToCourtBoundaries);
+                        
+                        document.getElementById('people-count').textContent = data.total_count || 0;
+                        document.getElementById('coordinates-count').textContent = currentDetections.length;
+                        
+                        const statusEl = document.getElementById('update-status');
+                        statusEl.textContent = `✅ Updated: ${currentDetections.length} people`;
+                        statusEl.className = 'auto-update-status';
+                        
+                        updateAreaCounts(data.area_counts);
+                        redrawVisualization();
+                    })
+                    .catch(error => {
+                        console.error('❌ Error:', error);
+                        const statusEl = document.getElementById('update-status');
+                        statusEl.textContent = '❌ Connection error';
+                        statusEl.className = 'auto-update-status error-status';
+                    });
+            }, 1500);
+        }
+
+        function updateAreaCounts(areaCounts) {
+            if (!areaCounts) return;
+            const areaList = document.getElementById('area-list');
+            areaList.innerHTML = '';
+            
+            Object.entries(areaCounts).forEach(([areaId, count]) => {
+                if (count > 0) {
+                    const areaItem = document.createElement('div');
+                    areaItem.className = 'area-item';
+                    areaItem.innerHTML = `<span>${areaId.replace('_', ' ')}:</span><span class="area-count">${count}</span>`;
+                    areaList.appendChild(areaItem);
+                }
+            });
+        }
+
+        function redrawVisualization() {
+            drawHeatmap();
+            drawDetections();
+        }
+
+        function drawHeatmap() {
+            const width = heatmapCanvas.width;
+            const height = heatmapCanvas.height;
+            heatmapCtx.clearRect(0, 0, width, height);
+
+            if (currentDetections.length === 0) return;
+
+            currentDetections.forEach(detection => {
+                const x = detection.x * width;
+                const y = detection.y * height;
+                const radius = 30;
+                const gradient = heatmapCtx.createRadialGradient(x, y, 0, x, y, radius);
+                gradient.addColorStop(0, 'rgba(255, 0, 0, 0.4)');
+                gradient.addColorStop(0.4, 'rgba(255, 165, 0, 0.25)');
+                gradient.addColorStop(1, 'rgba(255, 255, 0, 0)');
+
+                heatmapCtx.fillStyle = gradient;
+                heatmapCtx.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+            });
+
+            const imageData = heatmapCtx.getImageData(0, 0, width, height);
+            heatmapCtx.filter = 'blur(10px)';
+            heatmapCtx.putImageData(imageData, 0, 0);
+            heatmapCtx.filter = 'none';
+        }
+
+        function drawDetections() {
+            const width = detectionCanvas.width;
+            const height = detectionCanvas.height;
+            detectionCtx.clearRect(0, 0, width, height);
+            
+            currentDetections.forEach((detection, index) => {
+                const x = detection.x * width;
+                const y = detection.y * height;
+                const time = Date.now() / 1000;
+                const pulse = Math.sin(time * 2 + index) * 0.3 + 0.7;
+                
+                detectionCtx.beginPath();
+                detectionCtx.arc(x, y, 12 * pulse, 0, 2 * Math.PI);
+                detectionCtx.fillStyle = `rgba(255, 255, 255, ${pulse * 0.3})`;
+                detectionCtx.fill();
+                
+                detectionCtx.beginPath();
+                detectionCtx.arc(x, y, 8, 0, 2 * Math.PI);
+                detectionCtx.fillStyle = '#ff0000';
+                detectionCtx.fill();
+                
+                detectionCtx.fillStyle = '#ffffff';
+                detectionCtx.font = '10px Arial';
+                detectionCtx.textAlign = 'center';
+                detectionCtx.fillText(`P${index + 1}`, x, y - 15);
+            });
+        }
+
+        function animate() {
+            drawDetections();
+            animationFrame = requestAnimationFrame(animate);
+        }
+
+        function toggleDetection() {
+            fetch('/api/toggle_detection')
+                .then(response => response.json())
+                .then(data => {
+                    detectionActive = data.detection_active;
+                    const icon = document.getElementById('toggle-icon');
+                    const text = document.getElementById('toggle-text');
+                    
+                    if (data.detection_active) {
+                        icon.textContent = '⏸️';
+                        text.textContent = 'Pause';
+                    } else {
+                        icon.textContent = '▶️';
+                        text.textContent = 'Resume';
+                    }
+                })
+                .catch(error => console.error('Error:', error));
+        }
+
+        function clearHeatmap() {
+            currentDetections = [];
+            redrawVisualization();
+            document.getElementById('people-count').textContent = '0';
+            document.getElementById('coordinates-count').textContent = '0';
+            document.getElementById('area-list').innerHTML = '';
+        }
+
+        window.addEventListener('load', () => {
+            init();
+            console.log('✅ System ready!');
+        });
+
+        window.addEventListener('beforeunload', () => {
+            if (updateInterval) clearInterval(updateInterval);
+            if (animationFrame) cancelAnimationFrame(animationFrame);
+        });
+    </script>
+</body>
+</html>

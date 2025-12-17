@@ -1,6 +1,6 @@
-from roboflow import Roboflow
+#from roboflow import Roboflow
 
-rf = Roboflow(api_key="fOZILjlQev0ueprArURg")
+#rf = Roboflow(api_key="fOZILjlQev0ueprArURg")
 
 # Print available workspaces
-print(rf.workspace())
+#print(rf.workspace())
